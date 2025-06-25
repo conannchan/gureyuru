@@ -2,19 +2,19 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>8x8 オセロゲーム</title>
+  <title>グレとソンニュルくんのオセロ</title>
   <link href="https://fonts.googleapis.com/css2?family=Darumadrop+One&display=swap" rel="stylesheet">
   <style>
-    body { font-family: Arial, sans-serif; text-align: center; margin-top: 20px; }
-    h1 { font-family: 'Darumadrop One', cursive; }
-    table { border-collapse: collapse; margin: 0 auto; }
+    body { font-family: Arial, sans-serif; text-align: center; margin-top: 20px; position: relative; background-color: #ffffff; }
+    h1 { font-family: 'Darumadrop One', cursive; color: #ff58ab; }
+    table { border-collapse: collapse; margin: 0 auto; border: 5px solid #ff58ab; }
     td {
       width: 50px; height: 50px;
-      border: 2px solid rgb(230, 36, 110);
-      background-color: #ffc4e6; /* 囲碁の盤面風：薄茶色 */
+      border: 2px solid #ff58ab;
+      background-color: #ffd0e4;
       cursor: pointer;
       position: relative;
-    
+    }
     .disc {
       width: 40px; height: 40px;
       border-radius: 50%;
@@ -25,17 +25,47 @@
     }
     .black { background-image: url('gure.png'); }
     .white { background-image: url('sonnyul.png'); }
+    #result {
+      font-size: 2em;
+      margin-top: 20px;
+      font-family: 'Darumadrop One', cursive;
+      display: none;
+    }
+    #result.win { color: orange; }
+    #result.lose { color: deepskyblue; }
+    #passButton {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      padding: 10px 20px;
+      font-size: 16px;
+      font-family: 'Darumadrop One', cursive;
+      background-color: #fff8dc;
+      border: 2px solid #333;
+      cursor: pointer;
+    }
+    #turn { color: deepskyblue; font-weight: bold; }
   </style>
 </head>
 <body>
   <h1>グレとソンニュルくんのオセロ</h1>
-  <p id="turn">現在のターン: グレ</p>
+  <p id="turn">現在のターン: ソンニュル</p>
   <table id="board"></table>
+  <div id="result"></div>
+  <button id="passButton">パス</button>
 
   <script>
     const board = document.getElementById('board');
     const size = 8;
-    let turn = 'black';
+    let turn = 'white';
+
+    document.getElementById('passButton').addEventListener('click', () => {
+      if (turn === 'white' && getValidMoves('white').length === 0) {
+        turn = 'black';
+        updateTurnDisplay();
+        setTimeout(gureAI, 500);
+      }
+    });
 
     function createBoard() {
       for (let i = 0; i < size; i++) {
@@ -47,7 +77,6 @@
           cell.addEventListener('click', handleClick);
         }
       }
-      // 初期配置
       setDisc(3, 3, 'white');
       setDisc(4, 4, 'white');
       setDisc(3, 4, 'black');
@@ -74,8 +103,7 @@
         let x = row + dx, y = col + dy;
         let foundOpponent = false;
         while (x >= 0 && y >= 0 && x < size && y < size) {
-          const cell = board.rows[x].cells[y];
-          const disc = cell.querySelector('.disc');
+          const disc = board.rows[x].cells[y].querySelector('.disc');
           if (!disc) break;
           if (disc.classList.contains(opponent)) {
             foundOpponent = true;
@@ -91,6 +119,18 @@
       return false;
     }
 
+    function getValidMoves(color) {
+      const moves = [];
+      for (let i = 0; i < size; i++) {
+        for (let j = 0; j < size; j++) {
+          if (isValidMove(i, j, color)) {
+            moves.push([i, j]);
+          }
+        }
+      }
+      return moves;
+    }
+
     function flipDiscs(row, col, color) {
       const opponent = color === 'black' ? 'white' : 'black';
       const directions = [
@@ -101,14 +141,13 @@
         let x = row + dx, y = col + dy;
         let discsToFlip = [];
         while (x >= 0 && y >= 0 && x < size && y < size) {
-          const cell = board.rows[x].cells[y];
-          const disc = cell.querySelector('.disc');
+          const disc = board.rows[x].cells[y].querySelector('.disc');
           if (!disc) break;
           if (disc.classList.contains(opponent)) {
-            discsToFlip.push(cell);
+            discsToFlip.push(board.rows[x].cells[y]);
           } else if (disc.classList.contains(color)) {
-            for (let flipCell of discsToFlip) {
-              setDisc(flipCell.dataset.row, flipCell.dataset.col, color);
+            for (let cell of discsToFlip) {
+              setDisc(cell.dataset.row, cell.dataset.col, color);
             }
             break;
           } else {
@@ -120,15 +159,120 @@
       }
     }
 
-    function handleClick(e) {
+    function handleClick() {
+      if (turn !== 'white') return;
       const row = parseInt(this.dataset.row);
       const col = parseInt(this.dataset.col);
-      if (isValidMove(row, col, turn)) {
-        setDisc(row, col, turn);
-        flipDiscs(row, col, turn);
-        turn = turn === 'black' ? 'white' : 'black';
-        document.getElementById('turn').textContent = `現在のターン: ${turn === 'black' ? 'グレ' : 'ソンニュル'}`;
+      if (isValidMove(row, col, 'white')) {
+        setDisc(row, col, 'white');
+        flipDiscs(row, col, 'white');
+        turn = 'black';
+        updateTurnDisplay();
+        setTimeout(gureAI, 500);
       }
+    }
+
+    function gureAI() {
+      const moves = getValidMoves('black');
+      if (moves.length === 0) {
+        if (getValidMoves('white').length === 0) {
+          checkEndGame();
+          return;
+        }
+        turn = 'white';
+        updateTurnDisplay();
+        return;
+      }
+
+      // より強い戦略：角を優先、次に辺、次に最大ひっくり返し
+      const corners = [[0,0],[0,7],[7,0],[7,7]];
+      for (let move of corners) {
+        if (moves.some(([r,c]) => r === move[0] && c === move[1])) {
+          setDisc(move[0], move[1], 'black');
+          flipDiscs(move[0], move[1], 'black');
+          turn = 'white';
+          updateTurnDisplay();
+          checkEndGame();
+          return;
+        }
+      }
+
+      let bestMove = null;
+      let maxFlips = -1;
+      for (let [row, col] of moves) {
+        let count = countFlips(row, col, 'black');
+        if (count > maxFlips) {
+          maxFlips = count;
+          bestMove = [row, col];
+        }
+      }
+      const [row, col] = bestMove;
+      setDisc(row, col, 'black');
+      flipDiscs(row, col, 'black');
+      turn = 'white';
+      updateTurnDisplay();
+      checkEndGame();
+    }
+
+    function countFlips(row, col, color) {
+      const opponent = color === 'black' ? 'white' : 'black';
+      const directions = [
+        [-1, 0], [1, 0], [0, -1], [0, 1],
+        [-1, -1], [-1, 1], [1, -1], [1, 1]
+      ];
+      let total = 0;
+      for (let [dx, dy] of directions) {
+        let x = row + dx, y = col + dy, count = 0;
+        while (x >= 0 && y >= 0 && x < size && y < size) {
+          const disc = board.rows[x].cells[y].querySelector('.disc');
+          if (!disc) break;
+          if (disc.classList.contains(opponent)) {
+            count++;
+          } else if (disc.classList.contains(color)) {
+            total += count;
+            break;
+          } else {
+            break;
+          }
+          x += dx;
+          y += dy;
+        }
+      }
+      return total;
+    }
+
+    function updateTurnDisplay() {
+      document.getElementById('turn').textContent = `現在のターン: ${turn === 'black' ? 'グレ' : 'ソンニュル'}`;
+    }
+
+    function checkEndGame() {
+      const whiteMoves = getValidMoves('white').length;
+      const blackMoves = getValidMoves('black').length;
+      if (whiteMoves === 0 && blackMoves === 0) {
+        let whiteCount = 0;
+        let blackCount = 0;
+        for (let i = 0; i < size; i++) {
+          for (let j = 0; j < size; j++) {
+            const disc = board.rows[i].cells[j].querySelector('.disc');
+            if (disc?.classList.contains('white')) whiteCount++;
+            if (disc?.classList.contains('black')) blackCount++;
+          }
+        }
+        if (whiteCount > blackCount) {
+          displayResult('WIN! ソンニュルの勝ち', 'win');
+        } else if (whiteCount < blackCount) {
+          displayResult('LOSE... グレの勝ち', 'lose');
+        } else {
+          displayResult('DRAW! 引き分け', '');
+        }
+      }
+    }
+
+    function displayResult(text, className) {
+      const result = document.getElementById('result');
+      result.className = className;
+      result.textContent = text;
+      result.style.display = 'block';
     }
 
     createBoard();
